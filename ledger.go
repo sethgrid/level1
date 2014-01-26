@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -94,7 +95,15 @@ func updateLedger() {
 	f.Write([]byte(newFileContent))
 }
 
+var repo, user string
+
+func init() {
+	flag.StringVar(&repo, "repo", "lvl1-ycbmropw@stripe-ctf.com:level1", "level 1 of stripe")
+	flag.StringVar(&user, "user", "user-bhbu1b3t", "user supplied by stripe")
+}
+
 func main() {
+
 	updateLedger()
 	for {
 		gitCommit(fmt.Sprintf("I can haz gitcoin? %s", time.Now()))
