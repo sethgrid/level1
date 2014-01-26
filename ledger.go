@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func getHeadHash() []byte {
@@ -96,7 +97,7 @@ func updateLedger() {
 func main() {
 	updateLedger()
 	for {
-		gitCommit("Ledger Update")
+		gitCommit(fmt.Sprintf("I can haz gitcoin? %s", time.Now()))
 
 		//resetHead()
 		head := getHeadHash()
