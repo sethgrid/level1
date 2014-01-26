@@ -50,7 +50,7 @@ func getDifficulty() []byte {
 func updateLedger() {
 	// just appends. Needs to read file, find if entry is there
 	// and increment, else append
-	user := "user-bhbu1b3t"
+	//user := "user-bhbu1b3t"
 	var newFileContent string
 	userFound := false
 
