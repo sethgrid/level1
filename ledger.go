@@ -62,6 +62,7 @@ func updateLedger() {
 
 	for scanner.Scan() {
 		line := scanner.Text()
+
 		if strings.HasPrefix(line, user) {
 			userFound = true
 			data := strings.Split(line, ": ")
@@ -93,7 +94,6 @@ func updateLedger() {
 }
 
 func main() {
-
 	for {
 		updateLedger()
 		gitCommit()
