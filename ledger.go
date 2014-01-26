@@ -25,8 +25,8 @@ func resetHead() {
 	cmd.Run()
 }
 
-func gitCommit() {
-	cmd := exec.Command("git", "commit", "-am", "ledger update")
+func gitCommit(msg string) {
+	cmd := exec.Command("git", "commit", "-am", msg)
 	cmd.Run()
 }
 
@@ -94,9 +94,9 @@ func updateLedger() {
 }
 
 func main() {
+	updateLedger()
 	for {
-		updateLedger()
-		gitCommit()
+		gitCommit("Ledger Update")
 
 		//resetHead()
 		head := getHeadHash()
