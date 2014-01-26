@@ -50,7 +50,7 @@ func getDifficulty() []byte {
 func updateLedger() {
 	// just appends. Needs to read file, find if entry is there
 	// and increment, else append
-	//user := "user-bhbu1b3t"
+
 	var newFileContent string
 	userFound := false
 
@@ -95,6 +95,11 @@ func updateLedger() {
 	f.Write([]byte(newFileContent))
 }
 
+func clone() {
+	cmd := exec.Command("git", "clone", repo)
+	cmd.Run()
+}
+
 var repo, user string
 
 func init() {
@@ -106,6 +111,7 @@ func init() {
 
 func main() {
 
+	clone()
 	updateLedger()
 	for {
 		gitCommit(fmt.Sprintf("I can haz gitcoin? %s", time.Now()))
