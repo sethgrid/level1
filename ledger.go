@@ -100,6 +100,8 @@ var repo, user string
 func init() {
 	flag.StringVar(&repo, "repo", "lvl1-ycbmropw@stripe-ctf.com:level1", "level 1 of stripe")
 	flag.StringVar(&user, "user", "user-bhbu1b3t", "user supplied by stripe")
+
+	flag.Parse()
 }
 
 func main() {
