@@ -95,7 +95,7 @@ func copyRepo(i int) {
 	if err != nil {
 		fmt.Println("There was an error copying the repo", err)
 	}
-	fmt.Println("There should be level1_" + iStr)
+	fmt.Println("Copied repo to level1_" + iStr)
 }
 
 func getDifficulty(i int) []byte {
@@ -196,7 +196,7 @@ func mine(comm chan string, quit chan bool, i int, head, difficulty []byte) {
 			gitPush(i)
 			break
 		}
-		if counter%10000 == 0 {
+		if counter%50000 == 0 {
 			// fmt.Println(string(body))
 			// fmt.Println(string(sha1_sum))
 			// fmt.Println(string(ofInterest))
@@ -208,11 +208,11 @@ func mine(comm chan string, quit chan bool, i int, head, difficulty []byte) {
 }
 
 func main() {
-	runtime.GOMAXPROCS(4)
+	runtime.GOMAXPROCS(7)
 	clone()
 	comm := make(chan string)
 	quit := make(chan bool)
-	for i := 0; i < 50; i++ {
+	for i := 0; i < 250; i++ {
 		copyRepo(i)
 		updateLedger(i)
 		gitAddLedger(i)
@@ -227,9 +227,9 @@ func main() {
 		case info := <-comm:
 			fmt.Println(info)
 			close(quit)
-			break
+			// a break here only leaves the app hanging. debug later.
+			os.Exit(0)
 		default:
 		}
 	}
-	fmt.Println("done")
 }
