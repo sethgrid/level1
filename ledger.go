@@ -3,10 +3,13 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha1"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -63,19 +66,21 @@ func getTree(i int) []byte {
 	return tree
 }
 
-func getSha1(i int, body string) []byte {
+func getSha1(body string) []byte {
+	s := sha1.New()
+	hash_body := fmt.Sprintf("commit %d%s%s", len(body), []byte{0}, body)
+	io.WriteString(s, hash_body)
+	checksum := s.Sum(nil)
+	checksum_hex := []byte(fmt.Sprintf("%x", checksum))
+
+	return checksum_hex
+}
+
+func gitPush(i int) {
 	iStr := strconv.Itoa(i)
-	cmd := exec.Command("git", "hash-object", "-t", "commit", "--stdin")
+	cmd := exec.Command("git", "push", "origin", "master")
 	cmd.Dir = "level1_" + iStr
-
-	toWrite := body
-	cmd.Stdin = strings.NewReader(toWrite)
-
-	sha1, err := cmd.Output()
-	if err != nil {
-		fmt.Println("Error getting sha1", err)
-	}
-	return sha1
+	cmd.Run()
 }
 
 func clone() {
@@ -166,6 +171,10 @@ func init() {
 
 func mine(comm chan string, quit chan bool, i int, head, difficulty []byte) {
 	counter := 0
+	unix := time.Now().Unix()
+
+	tree := getTree(i)
+
 	for {
 		select {
 		case <-quit:
@@ -173,26 +182,23 @@ func mine(comm chan string, quit chan bool, i int, head, difficulty []byte) {
 		default:
 		}
 		counter++
-		unix := time.Now().Unix()
-
-		tree := getTree(i)
 
 		body := fmt.Sprintf("tree %s\nparent %s\nauthor CTF %s %d\n\nI Can haz gitcoin?\n\nCounter:%d",
 			tree, head, user, unix, counter)
-
-		sha1 := getSha1(i, body)
-		ofInterest := sha1[:len(difficulty)]
+		sha1_sum := getSha1(body)
+		ofInterest := sha1_sum[:len(difficulty)]
 
 		if bytes.Compare(ofInterest, difficulty) < 0 {
-			fmt.Println("Mined a gitcoin with ", sha1)
-			gitReset(i, string(sha1))
+			fmt.Println("Mined a gitcoin with ", sha1_sum)
+			gitReset(i, string(sha1_sum))
 			iStr := strconv.Itoa(i)
-			comm <- "Found it! in level_" + iStr + string(sha1)
+			comm <- "Found it! in level_" + iStr + string(sha1_sum)
+			gitPush(i)
 			break
 		}
-		if counter%500 == 0 {
+		if counter%5000 == 0 {
 			fmt.Println(string(body))
-			fmt.Println(string(sha1))
+			fmt.Println(string(sha1_sum))
 			fmt.Println(string(ofInterest))
 			fmt.Println(string(difficulty))
 		}
@@ -201,10 +207,11 @@ func mine(comm chan string, quit chan bool, i int, head, difficulty []byte) {
 }
 
 func main() {
+	runtime.GOMAXPROCS(4)
 	clone()
 	comm := make(chan string)
 	quit := make(chan bool)
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 50; i++ {
 		copyRepo(i)
 		updateLedger(i)
 		gitAddLedger(i)
