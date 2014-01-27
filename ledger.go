@@ -16,56 +16,105 @@ import (
 	"time"
 )
 
-func getHeadHash(i int) []byte {
-	iStr := strconv.Itoa(i)
+var repo, user, repoDir string
+
+func init() {
+	flag.StringVar(&repo, "repo", "lvl1-ycbmropw@stripe-ctf.com:level1", "level 1 of stripe")
+	flag.StringVar(&user, "user", "user-bhbu1b3t", "user supplied by stripe")
+
+	flag.Parse()
+
+	repoSplit := strings.Split(repo, ":")
+	repoDir = repoSplit[1]
+}
+
+func main() {
+	runtime.GOMAXPROCS(2)
+START:
+	startOver()
+	clone()
+	comm := make(chan string)
+	quit := make(chan bool)
+
+	updateLedger()
+	gitAddLedger()
+	head := getHeadHash()
+	tree := getTree()
+	difficulty := getDifficulty()
+
+	go mine(comm, quit, head, tree, difficulty)
+
+	timeout := time.After(5 * time.Minute)
+	for {
+		select {
+		case info := <-comm:
+			fmt.Println(info)
+			close(quit)
+			// a break here only leaves the app hanging. debug later.
+			os.Exit(0)
+		case <-timeout:
+			goto START
+		default:
+		}
+	}
+}
+
+func getHeadHash() []byte {
 	cmd := exec.Command("git", "rev-parse", "HEAD")
-	cmd.Dir = "level1_" + iStr
+	cmd.Dir = repoDir
 	head, err := cmd.Output()
 	if err != nil {
 		fmt.Println("Error getting head hash")
 	}
 	// remove trailing newline char
-	return head[:len(head)-1]
+	return bytes.TrimSpace(head)
 }
 
-func resetHead(i int) {
-	iStr := strconv.Itoa(i)
+func resetHead() {
 	cmd := exec.Command("git", "reset", "origin/HEAD", "--hard")
-	cmd.Dir = "level1_" + iStr
+	cmd.Dir = repoDir
 	cmd.Run()
 }
 
-func gitCommit(i int, msg string) {
-	iStr := strconv.Itoa(i)
+func gitCommit(msg string) {
 	cmd := exec.Command("git", "commit", "-am", msg)
-	cmd.Dir = "level1_" + iStr
+	cmd.Dir = repoDir
 	cmd.Run()
 }
 
-func gitReset(i int, hash string) {
-	iStr := strconv.Itoa(i)
+func gitReset(hash string) {
 	cmd := exec.Command("git", "reset", "-hard", hash)
-	cmd.Dir = "level1_" + iStr
+	cmd.Dir = repoDir
 	cmd.Run()
 }
 
-func gitAddLedger(i int) {
-	iStr := strconv.Itoa(i)
+func gitAddLedger() {
 	cmd := exec.Command("git", "add", "LEDGER.txt")
-	cmd.Dir = "level1_" + iStr
+	cmd.Dir = repoDir
 	cmd.Run()
 }
 
-func getTree(i int) []byte {
-	iStr := strconv.Itoa(i)
+func getTree() []byte {
 	cmd := exec.Command("git", "write-tree")
-	cmd.Dir = "level1_" + iStr
+	cmd.Dir = repoDir
 	tree, err := cmd.Output()
 	if err != nil {
 		fmt.Println("Error getting git write-tree", err)
 	}
 	// remove trailing newlline
-	return tree[:len(tree)-1]
+	return bytes.TrimSpace(tree)
+}
+
+func gitPush() {
+	cmd := exec.Command("git", "push", "origin", "master", "-ff")
+	cmd.Dir = repoDir
+	cmd.Run()
+}
+
+func clone() {
+	fmt.Println("git clone", repo, "...")
+	cmd := exec.Command("git", "clone", repo)
+	cmd.Run()
 }
 
 // original source: https://github.com/bwilkins/stripe-ctf3-level1-miner-src/blob/master/miner.go
@@ -79,32 +128,24 @@ func getSha1(body string) []byte {
 	return checksum_hex
 }
 
-func gitPush(i int) {
-	iStr := strconv.Itoa(i)
-	cmd := exec.Command("git", "push", "origin", "master", "-ff")
-	cmd.Dir = "level1_" + iStr
-	cmd.Run()
-}
-
 // original source: https://github.com/bwilkins/stripe-ctf3-level1-miner-src/blob/master/miner.go
-func GetGitCoin(i int, body, commitHash []byte) (bool, error) {
+func GetGitCoin(body, commitHash []byte) (bool, error) {
 	// because we are directly calculating the commit hash, we need to add it in to the git db
-	iStr := strconv.Itoa(i)
-	err := ioutil.WriteFile("level1_"+iStr+"/tmpledger", body, 0644)
+	err := ioutil.WriteFile(repoDir+"/tmpledger", body, 0644)
 	if err != nil {
 		fmt.Println("Error writing tmpledger", err)
 	}
 	hash_cmd := exec.Command("git", "hash-object", "-t", "commit", "-w", "tmpledger")
-	hash_cmd.Dir = "level1_" + iStr
+	hash_cmd.Dir = repoDir
 	err = hash_cmd.Run()
 
 	if err == nil {
 		updateRef := exec.Command("git", "update-ref", "refs/heads/master", string(commitHash))
-		updateRef.Dir = "level1_" + iStr
+		updateRef.Dir = repoDir
 		updateRef.Run()
 		if err == nil {
 			push := exec.Command("git", "push", "origin", "master")
-			push.Dir = "level1_" + iStr
+			push.Dir = repoDir
 			push.Run()
 			return true, nil
 		}
@@ -112,24 +153,8 @@ func GetGitCoin(i int, body, commitHash []byte) (bool, error) {
 	return false, err
 }
 
-func clone() {
-	cmd := exec.Command("git", "clone", repo)
-	cmd.Run()
-}
-
-func copyRepo(i int) {
-	iStr := strconv.Itoa(i)
-	cmd := exec.Command("cp", "-r", "level1", "level1_"+iStr)
-	_, err := cmd.Output()
-	if err != nil {
-		fmt.Println("There was an error copying the repo", err)
-	}
-	fmt.Println("Copied repo to level1_" + iStr)
-}
-
-func getDifficulty(i int) []byte {
-	iStr := strconv.Itoa(i)
-	f, err := os.Open("level1_" + iStr + "/difficulty.txt")
+func getDifficulty() []byte {
+	f, err := os.Open(repoDir + "/difficulty.txt")
 	if err != nil {
 		fmt.Println("Error opening difficulty:", err)
 	}
@@ -143,12 +168,12 @@ func getDifficulty(i int) []byte {
 	return line
 }
 
-func updateLedger(i int) {
+func updateLedger() {
+	fmt.Println("Updating ledger...")
 	var newFileContent string
 	userFound := false
-	iStr := strconv.Itoa(i)
 
-	f, err := os.OpenFile("level1_"+iStr+"/LEDGER.txt", os.O_RDWR, 0644)
+	f, err := os.OpenFile(repoDir+"/LEDGER.txt", os.O_RDWR, 0644)
 	if err != nil {
 		fmt.Println("Error opening file:", err)
 	}
@@ -189,16 +214,14 @@ func updateLedger(i int) {
 	f.Write([]byte(newFileContent))
 }
 
-var repo, user string
-
-func init() {
-	flag.StringVar(&repo, "repo", "lvl1-ycbmropw@stripe-ctf.com:level1", "level 1 of stripe")
-	flag.StringVar(&user, "user", "user-bhbu1b3t", "user supplied by stripe")
-
-	flag.Parse()
+func startOver() {
+	fmt.Println("Starting new run")
+	cmd := exec.Command("rm", "-rf", repoDir+"*")
+	cmd.Run()
 }
 
-func mine(comm chan string, quit chan bool, i int, head, tree, difficulty []byte) {
+func mine(comm chan string, quit chan bool, head, tree, difficulty []byte) {
+	fmt.Println("Mining...")
 	counter := 0
 	unix := time.Now().Unix()
 
@@ -221,59 +244,20 @@ Counter: %d`
 
 		body := fmt.Sprintf(bodyFmt,
 			tree, head, user, unix, user, unix, counter)
-		sha1_sum := getSha1(body)
-		ofInterest := sha1_sum[:len(difficulty)]
+		sha1Sum := getSha1(body)
+		ofInterest := sha1Sum[:len(difficulty)]
 
 		if bytes.Compare(ofInterest, difficulty) < 0 {
-			fmt.Println("Mined a gitcoin with ", string(sha1_sum))
-			//gitReset(i, string(sha1_sum))
-			iStr := strconv.Itoa(i)
-			_, err := GetGitCoin(i, []byte(body), sha1_sum)
+			_, err := GetGitCoin([]byte(body), sha1Sum)
 			if err != nil {
 				fmt.Println("Error getting GitCoin", err)
+				comm <- "Mined a gitcoin with " + string(sha1Sum)
+				break
 			}
-			comm <- "Found it! in level1_" + iStr + " " + string(sha1_sum)
-			break
 		}
 		if counter%50000 == 0 {
-			// fmt.Println(string(body))
-			// fmt.Println(string(sha1_sum))
-			// fmt.Println(string(ofInterest))
-			// fmt.Println(string(difficulty))
+			// give visual feedback that things are moving
 			fmt.Print(".")
-		}
-	}
-
-}
-
-func main() {
-	runtime.GOMAXPROCS(2)
-	clone()
-	comm := make(chan string)
-	quit := make(chan bool)
-
-	// was doing multiple runs
-	// turns out that the body will be the same in each
-	// so the sha1 will be the same in each. duh.
-	for i := 0; i < 1; i++ {
-		copyRepo(i)
-		updateLedger(i)
-		gitAddLedger(i)
-		//resetHead()
-		head := getHeadHash(i)
-		tree := getTree(i)
-		difficulty := getDifficulty(i)
-
-		go mine(comm, quit, i, head, tree, difficulty)
-	}
-	for {
-		select {
-		case info := <-comm:
-			fmt.Println(info)
-			close(quit)
-			// a break here only leaves the app hanging. debug later.
-			os.Exit(0)
-		default:
 		}
 	}
 }
