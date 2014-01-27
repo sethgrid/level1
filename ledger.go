@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"runtime"
@@ -63,9 +64,11 @@ func getTree(i int) []byte {
 	if err != nil {
 		fmt.Println("Error getting git write-tree", err)
 	}
-	return tree
+	// remove trailing newlline
+	return tree[:len(tree)-1]
 }
 
+// original source: https://github.com/bwilkins/stripe-ctf3-level1-miner-src/blob/master/miner.go
 func getSha1(body string) []byte {
 	s := sha1.New()
 	hash_body := fmt.Sprintf("commit %d%s%s", len(body), []byte{0}, body)
@@ -81,6 +84,32 @@ func gitPush(i int) {
 	cmd := exec.Command("git", "push", "origin", "master", "-ff")
 	cmd.Dir = "level1_" + iStr
 	cmd.Run()
+}
+
+// original source: https://github.com/bwilkins/stripe-ctf3-level1-miner-src/blob/master/miner.go
+func GetGitCoin(i int, body, commitHash []byte) (bool, error) {
+	// because we are directly calculating the commit hash, we need to add it in to the git db
+	iStr := strconv.Itoa(i)
+	err := ioutil.WriteFile("level1_"+iStr+"/tmpledger", body, 0644)
+	if err != nil {
+		fmt.Println("Error writing tmpledger", err)
+	}
+	hash_cmd := exec.Command("git", "hash-object", "-t", "commit", "-w", "tmpledger")
+	hash_cmd.Dir = "level1_" + iStr
+	err = hash_cmd.Run()
+
+	if err == nil {
+		updateRef := exec.Command("git", "update-ref", "refs/heads/master", string(commitHash))
+		updateRef.Dir = "level1_" + iStr
+		updateRef.Run()
+		if err == nil {
+			push := exec.Command("git", "push", "origin", "master")
+			push.Dir = "level1_" + iStr
+			push.Run()
+			return true, nil
+		}
+	}
+	return false, err
 }
 
 func clone() {
@@ -169,11 +198,9 @@ func init() {
 	flag.Parse()
 }
 
-func mine(comm chan string, quit chan bool, i int, head, difficulty []byte) {
+func mine(comm chan string, quit chan bool, i int, head, tree, difficulty []byte) {
 	counter := 0
 	unix := time.Now().Unix()
-
-	tree := getTree(i)
 
 	for {
 		select {
@@ -183,8 +210,17 @@ func mine(comm chan string, quit chan bool, i int, head, difficulty []byte) {
 		}
 		counter++
 
-		body := fmt.Sprintf("tree %s\nparent %s\nauthor CTF %s %d\n\nI Can haz gitcoin?\n\nCounter:%d",
-			tree, head, user, unix, counter)
+		bodyFmt := `tree %s
+parent %s
+author CTF %s <me@example.com> %d +0000
+committer CTF %s <me@example.com> %d +0000
+
+I can haz GitCoin?
+
+Counter: %d`
+
+		body := fmt.Sprintf(bodyFmt,
+			tree, head, user, unix, user, unix, counter)
 		sha1_sum := getSha1(body)
 		ofInterest := sha1_sum[:len(difficulty)]
 
@@ -192,8 +228,11 @@ func mine(comm chan string, quit chan bool, i int, head, difficulty []byte) {
 			fmt.Println("Mined a gitcoin with ", string(sha1_sum))
 			//gitReset(i, string(sha1_sum))
 			iStr := strconv.Itoa(i)
+			_, err := GetGitCoin(i, []byte(body), sha1_sum)
+			if err != nil {
+				fmt.Println("Error getting GitCoin", err)
+			}
 			comm <- "Found it! in level1_" + iStr + " " + string(sha1_sum)
-			gitPush(i)
 			break
 		}
 		if counter%50000 == 0 {
@@ -212,15 +251,16 @@ func main() {
 	clone()
 	comm := make(chan string)
 	quit := make(chan bool)
-	for i := 0; i < 250; i++ {
+	for i := 0; i < 6; i++ {
 		copyRepo(i)
 		updateLedger(i)
 		gitAddLedger(i)
 		//resetHead()
 		head := getHeadHash(i)
+		tree := getTree(i)
 		difficulty := getDifficulty(i)
 
-		go mine(comm, quit, i, head, difficulty)
+		go mine(comm, quit, i, head, tree, difficulty)
 	}
 	for {
 		select {
