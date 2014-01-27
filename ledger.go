@@ -78,7 +78,7 @@ func getSha1(body string) []byte {
 
 func gitPush(i int) {
 	iStr := strconv.Itoa(i)
-	cmd := exec.Command("git", "push", "origin", "master")
+	cmd := exec.Command("git", "push", "origin", "master", "-ff")
 	cmd.Dir = "level1_" + iStr
 	cmd.Run()
 }
@@ -189,18 +189,19 @@ func mine(comm chan string, quit chan bool, i int, head, difficulty []byte) {
 		ofInterest := sha1_sum[:len(difficulty)]
 
 		if bytes.Compare(ofInterest, difficulty) < 0 {
-			fmt.Println("Mined a gitcoin with ", sha1_sum)
-			gitReset(i, string(sha1_sum))
+			fmt.Println("Mined a gitcoin with ", string(sha1_sum))
+			//gitReset(i, string(sha1_sum))
 			iStr := strconv.Itoa(i)
-			comm <- "Found it! in level_" + iStr + string(sha1_sum)
+			comm <- "Found it! in level1_" + iStr + " " + string(sha1_sum)
 			gitPush(i)
 			break
 		}
-		if counter%5000 == 0 {
-			fmt.Println(string(body))
-			fmt.Println(string(sha1_sum))
-			fmt.Println(string(ofInterest))
-			fmt.Println(string(difficulty))
+		if counter%10000 == 0 {
+			// fmt.Println(string(body))
+			// fmt.Println(string(sha1_sum))
+			// fmt.Println(string(ofInterest))
+			// fmt.Println(string(difficulty))
+			fmt.Print(".")
 		}
 	}
 
@@ -226,6 +227,9 @@ func main() {
 		case info := <-comm:
 			fmt.Println(info)
 			close(quit)
+			break
+		default:
 		}
 	}
+	fmt.Println("done")
 }
