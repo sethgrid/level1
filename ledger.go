@@ -247,11 +247,15 @@ Counter: %d`
 }
 
 func main() {
-	runtime.GOMAXPROCS(7)
+	runtime.GOMAXPROCS(2)
 	clone()
 	comm := make(chan string)
 	quit := make(chan bool)
-	for i := 0; i < 6; i++ {
+
+	// was doing multiple runs
+	// turns out that the body will be the same in each
+	// so the sha1 will be the same in each. duh.
+	for i := 0; i < 1; i++ {
 		copyRepo(i)
 		updateLedger(i)
 		gitAddLedger(i)
